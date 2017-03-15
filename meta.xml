@@ -1,0 +1,4 @@
+﻿<meta>
+  <info name="GTAIdentity" description="An admin and account system for GTAN." type="script" author="NMDanny" version="1.0" />
+  <script src="Server/bin/Debug/Server.dll" type="server" lang="compiled" />
+</meta>
