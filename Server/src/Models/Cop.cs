@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GTANetworkServer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,8 +13,8 @@ namespace GTAIdentity.Models
         public Rank Rank { get; set; }
         public string Funds { get; set; }
 
-        public Cop(string name,Guid account) : base(name,account) { }
-        public Cop(string name,Account account) : base(name,account) { }
+        public Cop(string name,Client client,Guid account) : base(name,client,account) { }
+        public Cop(string name,Client client,Account account) : base(name,client,account) { }
         protected Cop() : base()
         {
 

@@ -170,7 +170,7 @@ namespace GTAIdentity.Modules
                     client.sendChatMessage(nameof(IdentityModule), "There already exists a character with that name.");
                     return;
                 }
-                var chara = new Character(charName, loggedPlayer.Account.Id);
+                var chara = new Character(charName, client, loggedPlayer.Account.Id);
                 session.Store(chara);
                 session.SaveChanges();
                 CharacterRegistered?.Invoke(chara);
@@ -221,12 +221,19 @@ namespace GTAIdentity.Modules
                 client.sendChatMessage(nameof(IdentityModule), "You're not logged into any account/character.");
                 return;
             }
-            
-            CharacterLoggedOut?.Invoke(loggedPlayer.Character);
-            loggedPlayer.Character = null;
-            Log.Debug($"{client.name} succesfully unlogged from his character.");
-            client.sendChatMessage(nameof(IdentityModule), $"You've successfully logged out of your character.");
-            UpdateFreeze(client);
+            using (var session = Store.OpenSession())
+            {
+                var updatedChar = loggedPlayer.Character;
+                updatedChar.UpdateFrom(client);
+                session.Store(updatedChar);
+                session.SaveChanges();
+                CharacterLoggedOut?.Invoke(loggedPlayer.Character);
+                loggedPlayer.Character = null;
+                Log.Debug($"{client.name} succesfully unlogged from his character.");
+                client.sendChatMessage(nameof(IdentityModule), $"You've successfully logged out of your character.");
+                UpdateFreeze(client);
+
+            }
         }
         
 

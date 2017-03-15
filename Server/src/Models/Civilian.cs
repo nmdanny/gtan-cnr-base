@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GTANetworkServer;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,8 +14,8 @@ namespace GTAIdentity.Models
         public decimal Cash { get; set; }
         public Job Job { get; set; }
 
-        public Civilian(string name,Account account) : base(name,account) { }
-        public Civilian(string name,Guid account) : base(name,account) { }
+        public Civilian(string name,Client client,Account account) : base(name,client,account) { }
+        public Civilian(string name,Client client,Guid account) : base(name,client,account) { }
 
         public override string GetStats()
         {

@@ -14,26 +14,28 @@ namespace GTAIdentity.Models
     public class Character
     {
         
+        public static readonly Vector3S DefaultLocation = new Vector3S(0,0,0);
+
         public Guid Id { get; set; }
         public Guid AccountId { get; set; }
 
         public string Name { get; set; }
         public Vector3S Location { get; set; }
         public Vector3S Rotation { get; set; }
-        public int Health { get; set; }
-        public int Armor { get; set; }
+        public int Health { get; set; } = 100;
+        public int Armor { get; set; } = 0;
         public Dictionary<WeaponHash, WeaponS> Weapons { get; set; } = new Dictionary<WeaponHash, WeaponS>();
-        public DateTime CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
         public DateTime LastSyncedAt { get; set; }
 
-        public Character(string name,Account account) : this(name,account.Id) { }
-        public Character(string name,Guid accountId)
+        public Character(string name,Client client,Account account) : this(name,client,account.Id) { }
+        public Character(string name,Client client,Guid accountId)
         {
             Id = Guid.NewGuid();
             Name = name;
             AccountId = accountId;
             CreatedAt = DateTime.Now;
-            LastSyncedAt = DateTime.Now;
+            UpdateFrom(client);
         }
         protected Character()
         {
@@ -41,9 +43,9 @@ namespace GTAIdentity.Models
         }
         public virtual void ApplyTo(Client client)
         {
-            client.position = Location;
-            client.rotation = Rotation;
-            client.health = Health;
+            client.position = Location ?? new Vector3(67.8051453,12.3775034,69.2144);
+            client.rotation = Rotation ?? new Vector3(0,0,168.847839);
+            client.health = Health > 0 ? Health : 100;
             client.armor = Armor;
             client.name = Name;
             client.nametag = Name;
@@ -110,6 +112,12 @@ namespace GTAIdentity.Models
             X = x; Y = y; Z = z;
         }
         public Vector3S(Vector3 vec)
+        {
+            X = vec.X;
+            Y = vec.Y;
+            Z = vec.Z;
+        }
+        public Vector3S(Vector3S vec)
         {
             X = vec.X;
             Y = vec.Y;
