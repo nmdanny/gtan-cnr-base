@@ -1,4 +1,5 @@
-﻿using GTANetworkServer;
+﻿using Common.Logging;
+using GTANetworkServer;
 using GTANetworkShared;
 using System;
 using System.Collections.Generic;
@@ -19,6 +20,12 @@ namespace GTAIdentity.Util
                     return player;
             }
             return null;
+        }
+
+        public static void ClientLog(this ILog logger,Client client,string msg)
+        {
+            logger.Info($"{client.name} got error: {msg}");
+            client.sendChatMessage($"~r~ERROR:~s~ {msg}");
         }
     }
 }
