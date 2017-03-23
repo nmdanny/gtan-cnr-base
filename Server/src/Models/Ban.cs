@@ -27,7 +27,7 @@ namespace GTAIdentity.Models
         public string SocialClubHandle { get; set; }
         public string Reason { get; set; }
         public bool Expunged { get; set; }
-        public string ExpungeReasion { get; set; }
+        public string ExpungeReason { get; set; }
         public DateTime Start { get; set; } = DateTime.Now;
         public DateTime End { get; set; }
 
@@ -41,7 +41,7 @@ namespace GTAIdentity.Models
             if (IsActive())
                 return $"Ban from {Start} to {End}, reason: \"{Reason}\"";
             if (Expunged)
-                return $"Expunged ban for reason \"{ExpungeReasion}\", original ban reason was from {Start} to {End} for the reason: \"{Reason}\"";
+                return $"Expunged ban for reason \"{ExpungeReason}\", original ban reason was from {Start} to {End} for the reason: \"{Reason}\"";
             return $"Inactive ban from {Start} to {End}, reason: \"{Reason}\"";
         }
         

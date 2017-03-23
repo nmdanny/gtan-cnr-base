@@ -43,7 +43,7 @@ namespace GTAIdentity.Models
         {
             return (17 * GetType().GetHashCode()) * 23 + Id.GetHashCode();
         }
-    }   
+    }
     public enum Role
     {
         PlainUser = 0,
@@ -52,5 +52,4 @@ namespace GTAIdentity.Models
         SuperAdmin = 3,
         RootAccess = 4
     }
-
 }

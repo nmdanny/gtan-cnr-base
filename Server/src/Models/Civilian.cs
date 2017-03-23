@@ -33,7 +33,13 @@ namespace GTAIdentity.Models
         {
         }
     }
+    [Serializable]
+    public enum Job
+    {
+        Unemployed = 0,
+        Thief = 1,
 
+    }
     [Serializable]
     public enum Wanted
     {
@@ -42,13 +48,4 @@ namespace GTAIdentity.Models
         Arrestable = 2,
         KillAuthorized = 3
     }
-    
-    [Serializable]
-    public enum Job
-    {
-        Unemployed = 0,
-        Thief = 1,
-
-    }
-
 }
