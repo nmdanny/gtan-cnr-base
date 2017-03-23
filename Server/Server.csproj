@@ -80,6 +80,9 @@
     <Reference Include="Npgsql, Version=3.2.0.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.3.2.0\lib\net451\Npgsql.dll</HintPath>
     </Reference>
+    <Reference Include="protobuf-net, Version=2.1.0.0, Culture=neutral, PublicKeyToken=257b51d87d2e4d67, processorArchitecture=MSIL">
+      <HintPath>..\packages\protobuf-net.2.1.0\lib\net451\protobuf-net.dll</HintPath>
+    </Reference>
     <Reference Include="Remotion.Linq, Version=2.1.0.0, Culture=neutral, PublicKeyToken=fee00910d6e5f53b, processorArchitecture=MSIL">
       <HintPath>..\packages\Remotion.Linq.2.1.1\lib\net45\Remotion.Linq.dll</HintPath>
     </Reference>
@@ -118,6 +121,15 @@
       <HintPath>..\packages\System.Net.Sockets.4.3.0\lib\net46\System.Net.Sockets.dll</HintPath>
     </Reference>
     <Reference Include="System.Numerics" />
+    <Reference Include="System.Reactive.Core, Version=3.0.3000.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Reactive.Core.3.1.1\lib\net46\System.Reactive.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Interfaces, Version=3.0.1000.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Reactive.Interfaces.3.1.1\lib\net45\System.Reactive.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Linq, Version=3.0.3000.0, Culture=neutral, PublicKeyToken=94bc3704cddfc263, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Reactive.Linq.3.1.1\lib\net46\System.Reactive.Linq.dll</HintPath>
+    </Reference>
     <Reference Include="System.Runtime.InteropServices.RuntimeInformation, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Runtime.InteropServices.RuntimeInformation.4.3.0\lib\net45\System.Runtime.InteropServices.RuntimeInformation.dll</HintPath>
     </Reference>
@@ -157,24 +169,92 @@
     <Compile Include="src\Models\Character.cs" />
     <Compile Include="src\Models\Civilian.cs" />
     <Compile Include="src\Models\Cop.cs" />
+    <Compile Include="src\Models\IngameAccount.cs" />
+    <Compile Include="src\Models\Player.cs" />
+    <Compile Include="src\Models\PlayerState.cs" />
+    <Compile Include="src\Models\Vector3S.cs" />
+    <Compile Include="src\Models\WeaponS.cs" />
     <Compile Include="src\Modules\AdminModule.cs" />
     <Compile Include="src\Commands\IdentityCommands.cs" />
     <Compile Include="src\Modules\CrimeModule.cs" />
     <Compile Include="src\Modules\IdentityModule.cs" />
     <Compile Include="src\DevelopmentStoreConfigurator.cs" />
-    <Compile Include="src\Models\LoggedPlayer.cs" />
     <Compile Include="src\MartenStoreConfigurator.cs" />
     <Compile Include="src\Models\Account.cs" />
     <Compile Include="src\Models\Ban.cs" />
+    <Compile Include="src\Shared\IdentityEvents.cs" />
     <Compile Include="src\Util\APIUtils.cs" />
     <Compile Include="src\Util\ConcurrencyUtils.cs" />
+    <Compile Include="src\Util\NetworkingUtils.cs" />
     <Compile Include="src\Util\PasswordDerivation.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="src\ScriptMain.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
+    <None Include="types-gtaidentity\Models.tst" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <TypeScriptCompile Include="types-gtaidentity\Account.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Account.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Ban.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Ban.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Character.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Character.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Civilian.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Civilian.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Client.ts" />
+    <TypeScriptCompile Include="types-gtaidentity\Cop.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Cop.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\index.ts" />
+    <TypeScriptCompile Include="types-gtaidentity\IdentityEvents.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Shared\IdentityEvents.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\IngameAccount.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\IngameAccount.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Player.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Player.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\PlayerState.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\PlayerState.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\Vector3S.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\Vector3S.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtaidentity\WeaponS.ts">
+      <DependentUpon>Models.tst</DependentUpon>
+      <CustomToolNamespace>src\Models\WeaponS.cs</CustomToolNamespace>
+    </TypeScriptCompile>
+    <TypeScriptCompile Include="types-gtanetwork\Declarations.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\Enums.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\GTANetwork.dll.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\GTANetworkShared.dll.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\index.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\NativeUI.dll.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\ScriptHookVDotNet.dll.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\System.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\System.Drawing.dll.d.ts" />
+    <TypeScriptCompile Include="types-gtanetwork\Xilium.CefGlue.dll.d.ts" />
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
