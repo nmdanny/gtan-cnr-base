@@ -46,19 +46,18 @@ namespace GTAIdentity.Modules
         /// <returns>Whether he has that role or not.</returns>
         public bool EnsureRole(Client caller, Role minimumRole, out Account account, bool notifyPlayer = true)
         {
-            account = Identity.FindLoggedPlayer(caller)?.Account;
+            account = Identity.GetAccount(caller)?.Account;
             if (account == null)
             {
                 if (notifyPlayer)
-                    caller.sendChatMessage(nameof(AdminModule), "Error, you're not logged in.");
+                    Log.ClientLog(caller, $"Error, you're not logged in.");
                 return false;
             }
             if (account.Role >= minimumRole)
             {
                 return true;
             }
-            Log.Debug($"{account.Username} tried to perform an action he's not authorized to do, his role is {account.Role}, minimum is {minimumRole}.");
-            caller.sendChatMessage(nameof(AdminModule), $"Error, you're not authorized to do this action, your role is {account.Role} but you need to be at least {minimumRole}. ");
+            Log.ClientLog(caller, $"Error, you're not authorized to do this action, your role is {account.Role} but you need to be at least {minimumRole}.");
             return false;
         }
 
@@ -88,7 +87,7 @@ namespace GTAIdentity.Modules
                 if (targets.Count == 0)
                     throw new InvalidOperationException($"Error, no players with the name {player} were found. ");
                 var playerClient = targets[0];
-                var playerAccId = Identity.FindLoggedPlayer(playerClient)?.Account.Id;
+                var playerAccId = Identity.GetAccount(playerClient)?.Account.Id;
                 var ban = new Ban()
                 {
                     AccountId = playerAccId,
@@ -150,7 +149,7 @@ namespace GTAIdentity.Modules
         }
 
         // If a banned wasn't kicked upon connection (he may have changed his IP/social club handle), kick him once he logs into his account and add his current IP to the ban.
-        private void EnsureAccountBans(LoggedPlayer player)
+        private void EnsureAccountBans(IngameAccount player)
         {
             using (var session = Store.LightweightSession())
             {

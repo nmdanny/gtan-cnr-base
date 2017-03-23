@@ -35,9 +35,10 @@ Note: it will match any player with a name or social club handle that includes '
             Log.Debug("Performing async test.");
             try
             {
-                var response = await API.RequestResponseFlow(caller, "test", "test_response", args: new object[] { "1 plus 1 equals", 2 });
-                caller.sendChatMessage($"Response is " + response);
-                Log.Debug($"AsyncFlow response is " + response);
+                var response = await API.RequestResponseFlow<string,object[]>(caller, "test", "test_response", data: new object[] { 1, 1 });
+                var res = (int)response[0];
+                caller.sendChatMessage($"Response is " + res);
+                Log.Debug($"AsyncFlow response is " + res);
             }
             catch (TimeoutException ex)
             {

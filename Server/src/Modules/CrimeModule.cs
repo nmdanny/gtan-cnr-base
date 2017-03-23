@@ -35,8 +35,8 @@ namespace GTAIdentity.Modules
 
         private void API_onPlayerDeath(Client player, NetHandle entityKiller, int weapon)
         {
-            LoggedPlayer attacker = null;
-            LoggedPlayer victim = Identity.FindLoggedPlayer(player);
+            Player attacker = null;
+            Player victim = Identity.GetPlayer(player);
             if (API.getEntityType(entityKiller) == EntityType.Vehicle)
             {
                 Log.Debug($"{player.name} was killed by a vehicle. TODO: handle this");
@@ -44,7 +44,7 @@ namespace GTAIdentity.Modules
             }
             else if(API.getEntityType(entityKiller) == EntityType.Player)
             {
-                attacker = Identity.FindLoggedPlayer(entityKiller);
+                attacker = Identity.GetPlayer(API.getPlayerFromHandle(entityKiller));
             }
             else
             {
@@ -52,16 +52,6 @@ namespace GTAIdentity.Modules
             }
             if (victim != null && attacker != null && victim != attacker)
             {
-                if (!victim.CharacterLogged)
-                {
-                    Log.Warn($"Victim {victim} isn't logged into a character.");
-                    return;
-                }
-                if(!attacker.CharacterLogged)
-                {
-                    Log.Warn($"Attacker {attacker} isn't logged into a character.");
-                    return;
-                }
                 HandleGameplayDeath(victim.Character, attacker.Character);
             }
         }
@@ -96,54 +86,44 @@ namespace GTAIdentity.Modules
 
         public async Task Arrest(Cop cop,Civilian civ)
         {
-            var loggedCiv = Identity.FindLoggedPlayer(civ);
-            var loggedCop = Identity.FindLoggedPlayer(cop);
-            var copClient = loggedCop.Client;
-            var civClient = loggedCiv.Client;
+            var civPlayer = Identity.Players.First(p => p.Character == civ);
+            var copPlayer = Identity.Players.First(p => p.Character == cop);
+            var civClient = civPlayer.Client;
+            var copClient = copPlayer.Client;
 
-            
+
             if (civ.WantedLevel < Wanted.Arrestable)
             {
-                Log.Debug($"{cop} tried to arrest {civ} who is not arrestable.");
-                Identity.FindLoggedPlayer(civ).Client.sendChatMessage($"You can't arrest {civ.Name}, his wanted level isn't high enough.");
+                Log.ClientLog(copClient, $"You can't arrest {civ.Name} as he's not arrestable.");
                 return;
             }
             var distanceVector = (copClient.position - civClient.position);
             var distance = distanceVector.Length();
             if (distance <= ArrestRange)
             {
-                copClient.sendChatMessage($"You're too far from {civ.Name}, you need to be within {ArrestRange} from the target in order to arrest him.");
+                Log.ClientLog(copClient,$"You're too far from {civ.Name}, you need to be within {ArrestRange} from the target in order to arrest him.");
                 return;
             }
-            var response = await API.RequestResponseFlow(copClient, "check_los", "check_los_response", args: civClient.position);
-            if (response.Length == 1 && response[0] is bool result)
-            {
-                if (result)
+            var response = await API.RequestResponseFlow<bool,Vector3S>(copClient, "check_los", "check_los_response", data: civClient.position);
+            if (response)
                 {
                     Log.Info($"{cop} has arrested {civ}.");
                     copClient.sendChatMessage($"You've succesfully arrested {civ.Name}!");
                 } 
                 else
                 {
-                    Log.Debug($"{cop} has no line of sight to {civ}, so he can't arrest him.");
-                    copClient.sendChatMessage($"You have no line of sight to {civ.Name}");
+                Log.ClientLog(copClient, $"You have no line of sight to {civ.Name}.");
+                return;
                 }
             }
-            else
-            {
-                Log.Error($"Invalid response sent by 'check_los_response' within Arrest method.");
-                copClient.sendChatMessage("Something went wrong while checking for line of sight with the suspect.");
-                return;
-            }
-
-        }
+        
 
         public async Task ArrestNearby(Client caller)
         {
-            var callerChar = Identity.FindLoggedPlayer(caller);
+            var callerChar = Identity.GetPlayer(caller);
             if (callerChar?.Character is Cop cop)
             {
-                var nearbyCrim = Identity.LoggedPlayers.FirstOrDefault(lp =>
+                var nearbyCrim = Identity.Players.FirstOrDefault(lp =>
                     lp.Character is Civilian civ &&
                     civ.WantedLevel >= Wanted.Arrestable
                     && (lp.Client.position - caller.position).Length() < ArrestRange);

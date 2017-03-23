@@ -1,18 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GTANetworkServer;
 using GTANetworkShared;
-
+using GTAIdentity.Shared;
 using Marten;
 using GTAIdentity.Models;
 using GTAIdentity.Util;
 using Common.Logging;
+using Newtonsoft.Json;
 
 namespace GTAIdentity.Modules
 {
+
+
+
+
     /// <summary>
     /// This identity module handles account logins/logouts and keeps track of the currently logged players. (as well as their <see cref="Account"/> and <see cref="Character"/> references)
     /// </summary>
@@ -23,28 +29,61 @@ namespace GTAIdentity.Modules
         protected ILog Log { get; }
 
 
-        public IReadOnlyList<LoggedPlayer> LoggedPlayers { get => _loggedPlayers?.AsReadOnly(); }
         public ClientRestrictions ClientRestrictions = ClientRestrictions.Free;
 
-        protected List<LoggedPlayer> _loggedPlayers;
+        public IReadOnlyList<IngameAccount> Accounts { get => accounts.Values.ToList().AsReadOnly(); }
+        public IReadOnlyList<Player> Players { get => players.Values.ToList().AsReadOnly(); }
+        protected Dictionary<Client, IngameAccount> accounts;
+        protected Dictionary<Client, Player> players;
 
         public virtual event Action<Account> AccountRegistered;
-        public event Action<LoggedPlayer> AccountLoggedIn;
-        public event Action<LoggedPlayer> AccountLoggedOut;
+        public event Action<IngameAccount> AccountLoggedIn;
+        public event Action<IngameAccount> AccountLoggedOut;
         public event Action<Character> CharacterRegistered;
         public event Action<Character> CharacterLoggedIn;
         public event Action<Character> CharacterLoggedOut;
 
-        public IdentityModule(IDocumentStore store,API api)
+
+        public IngameAccount GetAccount(Client client)
+        {
+            try
+            {
+                return accounts[client];
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+        }
+        public Player GetPlayer(Client client)
+        {
+            try
+            {
+                return players[client];
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+        }
+
+        public IdentityModule(IDocumentStore store, API api)
         {
             Store = store;
             API = api;
             Log = LogManager.GetLogger<IdentityModule>();
 
-            _loggedPlayers = new List<LoggedPlayer>(API.getMaxPlayers());
+            accounts = new Dictionary<Client, IngameAccount>(API.getMaxPlayers());
+            players = new Dictionary<Client, Player>(API.getMaxPlayers());
 
             api.onPlayerConnected += API_onPlayerConnected;
             api.onPlayerDisconnected += API_onPlayerDisconnected;
+            api.OnClientEventTrigger<string>(IdentityEvents.characterSelected).Subscribe((tuple) =>
+            {
+                var (client, character) = tuple;
+                CharacterEnter(client, character);
+            });
+
 
             Log.Info("Identity module started.");
             LogStatistics();
@@ -54,9 +93,10 @@ namespace GTAIdentity.Modules
         {
             PromptPlayer(player);
             UpdateFreeze(player, promptPlayer: false);
+            FirePlayerStateChanged(player);
         }
 
-        
+
         private void API_onPlayerDisconnected(Client player, string reason)
         {
             ClientLogout(player);
@@ -64,18 +104,17 @@ namespace GTAIdentity.Modules
 
         public void ClientRegister(Client client, string username, string password)
         {
-            if(FindLoggedPlayer(client) != null)
+            if (GetAccount(client) != null)
             {
-                client.sendChatMessage("Identity Module", "You're already logged in.");
-                Log.Debug($"{client.name} tried to register while already logged.");
+                Log.ClientLog(client, "You're already logged in.");
                 return;
             }
+
             using (var session = Store.LightweightSession())
             {
                 if (session.Query<Account>().Any(acc => acc.Username.Equals(username, StringComparison.OrdinalIgnoreCase)))
                 {
-                    Log.Debug($"{client.name} tried to register with an already occupied username \"{username}\".");
-                    client.sendChatMessage("Identity Module", "An account with that username already exists.");
+                    Log.ClientLog(client, $"An account with the username \"{username}\" already exists.");
                     return;
                 }
                 var account = new Account(username, password);
@@ -83,22 +122,20 @@ namespace GTAIdentity.Modules
                 session.SaveChanges();
                 AccountRegistered?.Invoke(account);
                 Log.Info($"{client.name} has registered with the username {username}.");
-                client.sendChatMessage("Identity Module", $"Registered with the username {username} successfully. You may now login.");
+                client.sendChatMessage($"Registered with the username {username} successfully. You may now login.");
             }
         }
 
         public void ClientLogin(Client client, string username, string password)
         {
-            if (LoggedPlayers.Any(lp => lp.Account.Username.Equals(username, StringComparison.OrdinalIgnoreCase)))
+            if (Accounts.Any(acc => acc.Account.Username.Equals(username, StringComparison.OrdinalIgnoreCase)))
             {
-                Log.Debug($"{client.name} tried to log into a logged in player of name {username}.");
-                client.sendChatMessage("Identity Module", "There's already a logged in player with that username.");
+                Log.ClientLog(client, $"There's already a logged in player with the name {username}.");
                 return;
             }
-            if(FindLoggedPlayer(client) != null)
+            else if (GetAccount(client) is IngameAccount acc)
             {
-                Log.Debug($"{client.name} tried to login while already logged to an account.");
-                client.sendChatMessage("Identity Module", "You're already logged in.");
+                Log.ClientLog(client, $"You're already logged in as {acc.Account.Username}");
                 return;
             }
             using (var session = Store.LightweightSession())
@@ -106,22 +143,21 @@ namespace GTAIdentity.Modules
                 var account = session.Query<Account>().FirstOrDefault(acc => acc.Username.Equals(username, StringComparison.OrdinalIgnoreCase));
                 if (account == null)
                 {
-                    Log.Debug($"{client.name} tried to log to a non-existant account of name {username}");
-                    client.sendChatMessage("Identity Module", "No account with that username was found.");
+                    Log.ClientLog(client, $"No account with the username \"{username}\" was found.");
                     return;
                 }
                 if (!account.VerifyLogin(password))
                 {
-                    Log.Debug($"{client.name} tried to log into {username} with a wrong password.");
-                    client.sendChatMessage("Identity Module", $"Error: incorrect password for username {username}.");
+                    Log.ClientLog(client, $"You've entered an incorrect password while entering \"{username}\".");
                     return;
                 }
-                var logged = new LoggedPlayer(client, account);
+                var logged = new IngameAccount(client, account);
                 AccountLoggedIn?.Invoke(logged);
-                _loggedPlayers.Add(logged);
+                accounts.Add(client, logged);
                 Log.Info($"{client.name} has successfully logged into account {account.Username}");
-                client.sendChatMessage("Identity Module", $"You've successfully logged in as {account.Username}. Your last login was at {account.LastLoggedDate}.");
+                client.sendChatMessage($"You've successfully logged in as {account.Username}. Your last login was at {account.LastLoggedDate}.");
                 UpdateFreeze(client);
+                FirePlayerStateChanged(client);
                 account.LastLoggedDate = DateTime.Now;
                 session.SaveChanges();
 
@@ -130,112 +166,109 @@ namespace GTAIdentity.Modules
 
         public void ClientLogout(Client client)
         {
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (loggedPlayer == null)
+            var account = GetAccount(client);
+            if (account == null)
             {
-                Log.Debug($"{client.name} tried to logout while already logged out.");
-                client.sendChatMessage("Identity Module", "You're already logged out.");
+                Log.ClientLog(client, "You're already logged out.");
                 return;
             }
-            _loggedPlayers.Remove(loggedPlayer);
-            AccountLoggedOut?.Invoke(loggedPlayer);
-            if (loggedPlayer.Character != null)
-                CharacterLeave(client);
-            Log.Info($"{client.name} logged out of account {loggedPlayer.Account.Username}.");
-            client.sendChatMessage("Identity Module", "Logged out succesfully.");
+            accounts.Remove(client);
+            Log.Info($"{client.name} logged out of account {account.Account.Username}.");
+            client.sendChatMessage($"Logged out succesfully out of {account.Account.Username}.");
+            AccountLoggedOut?.Invoke(account);
             UpdateFreeze(client);
+            FirePlayerStateChanged(client);
         }
 
-        public void CharacterRegister(Client client,string charName)
+        public void CharacterRegister(Client client, string charName)
         {
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (loggedPlayer == null)
+            var player = GetPlayer(client);
+            var account = GetAccount(client);
+            if (account == null)
             {
-                Log.Debug($"{client.name} tried to create a character while he's not logged to an account.");
-                client.sendChatMessage(nameof(IdentityModule), "You must be logged into an account before creating a character.");
+                Log.ClientLog(client, $"You can't create a character while not logged into an account.");
                 return;
             }
-            if (loggedPlayer.Character != null)
+            if (player != null)
             {
-                Log.Debug($"{client.name} tried to create a character while already logged to one.");
-                client.sendChatMessage(nameof(IdentityModule), "You're already logged into a character.");
+                Log.ClientLog(client, $"You're already inside character \"{player.Character.Name}\", you can't create a new one.");
                 return;
             }
             using (var session = Store.OpenSession())
             {
-                var alreadyExisting = session.Query<Character>().Count(character => character.Name.Equals(charName,StringComparison.OrdinalIgnoreCase));
+                var alreadyExisting = session.Query<Character>().Count(ch => ch.Name.Equals(charName, StringComparison.OrdinalIgnoreCase));
                 if (alreadyExisting > 0)
                 {
-                    Log.Debug($"{client.name} tried to create an already existing character of name {charName}.");
-                    client.sendChatMessage(nameof(IdentityModule), "There already exists a character with that name.");
+                    Log.ClientLog(client, $"A character with the name \"{charName}\" alraedy exists.");
                     return;
                 }
-                var chara = new Character(charName, client, loggedPlayer.Account.Id);
-                session.Store(chara);
+                var character = new Character(charName, client, account.Account.Id);
+                session.Store(character);
                 session.SaveChanges();
-                CharacterRegistered?.Invoke(chara);
-                Log.Info($"{client.name} of account {loggedPlayer.Account.Username} has created character {chara.Name}.");
-                client.sendChatMessage(nameof(IdentityModule), $"Character \"{chara.Name}\" registered, you may now enter it.");
+                CharacterRegistered?.Invoke(character);
+                Log.Info($"{client.name} of account {account.Account.Username} has created character {character.Name}.");
+                client.sendChatMessage(nameof(IdentityModule), $"Character \"{character.Name}\" registered, you may now enter it.");
             }
         }
 
-        public void CharacterEnter(Client client,string charName)
+        public void CharacterEnter(Client client, string charName)
         {
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (loggedPlayer == null)
+            var account = GetAccount(client);
+            var player = GetPlayer(client);
+            if (account == null)
             {
-                Log.Debug($"{client.name} tried to enter a character while not logged to an account.");
-                client.sendChatMessage(nameof(IdentityModule), "You must be logged into an account before entering a character.");
+                Log.ClientLog(client, "You must be logged into an account before entering a character.");
                 return;
             }
-            if (loggedPlayer.Character != null)
+            if (player != null)
             {
-                Log.Debug($"{client.name} tried to log to a character while alerady in one.");
-                client.sendChatMessage(nameof(IdentityModule), "You're already logged into a character.");
+                Log.ClientLog(client, $"You can't enter a character while already inside \"{player.Character.Name}\".");
                 return;
             }
             using (var session = Store.OpenSession())
             {
-                var chara = session.Query<Character>().FirstOrDefault(character => character.AccountId == loggedPlayer.Account.Id && character.Name.Equals(charName,StringComparison.OrdinalIgnoreCase));
-                if (chara == null)
+                var character = session.Query<Character>().FirstOrDefault(ch => ch.AccountId == account.Account.Id && ch.Name.Equals(charName, StringComparison.OrdinalIgnoreCase));
+                if (character == null)
                 {
-                    Log.Debug($"{client.name} of account {loggedPlayer.Account.Username} tried to access non-existant character \"{charName}\".");
-                    client.sendChatMessage(nameof(IdentityModule), $"No character with the name of {charName} has been found under your account.");
+                    Log.ClientLog(client, $"No character of the name {charName} was found under your account.");
                     return;
                 }
+                player = new Player(client, character);
+                player.Character.ApplyTo(client);
+                players.Add(client, player);
                 client.sendChatMessage(nameof(IdentityModule), $"You've successfully logged into character {charName}");
-                Log.Info($"{loggedPlayer} successfully logged as character {charName}");
-                loggedPlayer.Character = chara;
-                loggedPlayer.Character.ApplyTo(client);
-                CharacterLoggedIn?.Invoke(chara);
+                Log.Info($"{client.name} successfully logged as character \"{charName}\"");
+                CharacterLoggedIn?.Invoke(character);
                 UpdateFreeze(client);
+                FirePlayerStateChanged(client);
             }
         }
 
         public void CharacterLeave(Client client)
         {
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (loggedPlayer == null || loggedPlayer.Character == null)
+            var player = GetPlayer(client);
+            var account = GetAccount(client);
+            if (account == null || player == null)
             {
-                Log.Debug($"{client.name} tried to leave a character while not logged into any account/character.");
-                client.sendChatMessage(nameof(IdentityModule), "You're not logged into any account/character.");
+                Log.ClientLog(client, "You tried to leave a character despite not being logged into any account/character.");
                 return;
             }
             using (var session = Store.OpenSession())
             {
-                var updatedChar = loggedPlayer.Character;
-                updatedChar.UpdateFrom(client);
-                session.Store(updatedChar);
+                var character = player.Character;
+                character.UpdateFrom(client);
+                session.Store(character);
                 session.SaveChanges();
-                CharacterLoggedOut?.Invoke(loggedPlayer.Character);
-                loggedPlayer.Character = null;
+                players.Remove(client);
                 Log.Debug($"{client.name} succesfully unlogged from his character.");
-                client.sendChatMessage(nameof(IdentityModule), $"You've successfully logged out of your character.");
-                UpdateFreeze(client);
+                client.sendChatMessage($"You've successfully logged out of your character \"{character.Name}\"");
 
+                CharacterLoggedOut?.Invoke(player.Character);
+                UpdateFreeze(client);
+                FirePlayerStateChanged(client);
             }
         }
-        
+
 
         public void Whoami(Client client)
         {
@@ -244,23 +277,24 @@ namespace GTAIdentity.Modules
                 $"address is {client.address}, handle is {client.handle}\n" +
                 $"ACL group is {API.getPlayerAclGroup(client)}\n" +
                 $"location is {API.toJson(client.position)} with rotation {API.toJson(client.rotation)}.\n";
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (loggedPlayer != null)
+            var account = GetAccount(client);
+            var player = GetPlayer(client);
+            if (account != null)
             {
-                info += $"You are logged into {loggedPlayer.Account.Username} which has the following id: {loggedPlayer.Account.Id} and the following role: {loggedPlayer.Account.Role}\n";
-                if (loggedPlayer.Character != null)
+                info += $"You are logged into {account.Account.Username} which has the following id: {account.Account.Id} and the following role: {account.Account.Role}\n";
+                if (player != null)
                 {
-                    info += $"You're also logged into character {loggedPlayer.Character.Name}.\n";
+                    info += $"You're also logged into character {player.Character.Name}.\n";
                 }
                 using (var session = Store.OpenSession())
                 {
-                    var bans = session.Query<Ban>().Count(ban => ban.AccountId == loggedPlayer.Account.Id);
+                    var bans = session.Query<Ban>().Count(ban => ban.AccountId == account.Account.Id);
                     info += $"You have {bans} bans on record\n";
-                    var chars = session.Query<Character>().Where(c => c.AccountId == loggedPlayer.Account.Id).ToList();
-                    if (chars.Count == 0)
+                    var characters = session.Query<Character>().Where(c => c.AccountId == account.Account.Id).ToList();
+                    if (characters.Count == 0)
                         info += $"You have no characters.\n";
                     else
-                        info += $"You have {chars.Count} characters: {string.Join(",", chars.Select(c => c.Name))}";
+                        info += $"You have {characters.Count} characters: {string.Join(",", characters.Select(c => c.Name))}";
                 }
             }
             else
@@ -293,18 +327,19 @@ namespace GTAIdentity.Modules
         // Ensures that the player is frozen if logged out from an account,character, or not at all, depending on ClientRestrictions.
         // TODO: teleport him to some nice area, change camera, stuff like that..
         // Exploit: if I implement admin-freezing, players could evade it by invoking this function. Should add variable that checks if a player is admin-frozen.
-        private void UpdateFreeze(Client client,bool promptPlayer = true)
+        private void UpdateFreeze(Client client, bool promptPlayer = true)
         {
 
-            var loggedPlayer = FindLoggedPlayer(client);
-            if (ClientRestrictions >= ClientRestrictions.RequireAccountLogin && loggedPlayer == null)
+            var player = GetPlayer(client);
+            var account = GetAccount(client);
+            if (ClientRestrictions >= ClientRestrictions.RequireAccountLogin && account == null)
             {
                 client.freezePosition = true;
                 if (promptPlayer)
                     client.sendChatMessage(nameof(IdentityModule), "You'll need to login to an account to proceed.");
                 return;
             }
-            if(ClientRestrictions >= ClientRestrictions.RequireCharacterLogin && loggedPlayer.Character == null)
+            if (ClientRestrictions >= ClientRestrictions.RequireCharacterLogin && player == null)
             {
                 client.freezePosition = true;
                 if (promptPlayer)
@@ -314,22 +349,35 @@ namespace GTAIdentity.Modules
             client.freezePosition = false;
         }
 
-        public LoggedPlayer FindLoggedPlayer(Client client)
+        protected void FirePlayerStateChanged(Client client)
         {
-            return LoggedPlayers.FirstOrDefault(lp => lp.Client == client);
+            
+            var account = GetAccount(client);
+            var player = GetPlayer(client);
+            if (account == null)
+                API.RequestResponseFlow(client, IdentityEvents.playerStateChanged, new PlayerStateChange()
+                {
+                    Account = null, Character = null, PlayerState = PlayerState.Connected
+                });
+            else if (player == null)
+            {
+                using (var session = Store.LightweightSession())
+                {
+                    var charNames = session.Query<Character>().Where(ch => ch.AccountId == account.Account.Id).Select(ch => ch.Name);
+                    API.RequestResponseFlow(client, IdentityEvents.playerStateChanged, new PlayerStateChange()
+                {
+                    Account = account.Account, Character = null, PlayerState = PlayerState.AccountLogged, CharacterNames = charNames
+                });
+
+                }
+            }
+            else
+                API.RequestResponseFlow(client, IdentityEvents.playerStateChanged, new PlayerStateChange()
+                {
+                    Account = account.Account, Character = player.Character, PlayerState = PlayerState.CharacterLogged
+                });
         }
-        public LoggedPlayer FindLoggedPlayer(Account account)
-        {
-            return LoggedPlayers.FirstOrDefault(lp => lp.Account == account);
-        }
-        public LoggedPlayer FindLoggedPlayer(Character character)
-        {
-            return LoggedPlayers.FirstOrDefault(lp => lp.Character == character);
-        }
-        public LoggedPlayer FindLoggedPlayer(NetHandle handle)
-        {
-            return LoggedPlayers.FirstOrDefault(lp => lp.Client.handle == handle);
-        }
+
 
     }
 
@@ -338,7 +386,7 @@ namespace GTAIdentity.Modules
     /// </summary>
     public enum ClientRestrictions
     {
-        Free = 0, 
+        Free = 0,
         RequireAccountLogin = 1,
         RequireCharacterLogin = 2
     }
