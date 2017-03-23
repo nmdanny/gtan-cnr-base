@@ -1,7 +1,10 @@
 ﻿using GTANetworkServer;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,39 +41,10 @@ namespace GTAIdentity.Util
         }
 
 
-        /// <summary>
-        /// A task performing a request-response interaction with a specific client, by triggering a client side event,
-        /// and then waiting for him to trigger a server-side event in response.
-        /// </summary>
-        /// <param name="api">An API instance, Note that it must not be API.shared, as that one doesn't support events!</param>
-        /// <param name="client">The client we're interacting with</param>
-        /// <param name="clientEventName">The name of the client-side event to be triggered on the client.</param>
-        /// <param name="serverEventName">The name of the server-side event that we're expecting</param>
-        /// <param name="millisecondsTimeout">The timeout(in milliseconds) before our task fails.</param>
-        /// <param name="args">Arguments to pass to the client-side event.</param>
-        /// <returns>A task containing the arguments passed by the client's response.</returns>
-        /// <exception cref="TimeoutException">Thrown when the client's response timeouts.</exception>
-        public static async Task<object[]> RequestResponseFlow(this API api, Client client, string clientEventName, string serverEventName, int millisecondsTimeout = 1000,params object[] args)
-        {
-            var completionSource = new TaskCompletionSource<object[]>();
-            API.ServerEventTrigger handler = (sender, evName, responseArgs) =>
-            {
-                if (sender == client && evName == serverEventName)
-                {
-                    completionSource.SetResult(args);
-                }
-            };
-            api.onClientEventTrigger += handler;
-            api.triggerClientEvent(client, clientEventName, args);
-            try
-            {
-                var result = await completionSource.Task.TimeoutAfter(millisecondsTimeout);
-                return result;
-            }
-            finally
-            {
-                api.onClientEventTrigger -= handler;
-            }
-        }
+
+        
     }
+
+
+
 }
