@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "module": "commonjs",
+    "outFile": "dist/bundle.js",
+    "sourceMap": true,
+    "target": "es5",
+    "lib": [
+      "es2016", "scripthost"
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ]
+}
